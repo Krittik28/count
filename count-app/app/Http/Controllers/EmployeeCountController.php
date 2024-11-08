@@ -3,86 +3,37 @@
 namespace App\Http\Controllers;
 
 use App\Models\Employee;
-use App\Models\Program;
-use App\Models\Designation;
-use App\Models\Level;
-use App\Models\District;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class EmployeeCountController extends Controller
 {
-    public function showCountForm()
-    {
-        $levels = Level::all();
-        $districts = District::all();
-        $programs = Program::all();
-        $designations = Designation::all();
-
-        return view('employee_counts', compact('levels', 'districts', 'programs', 'designations'));
-    }
-
     public function countEmployees(Request $request)
     {
-        $groupBy = $request->query('group_by');
-        $levelId = $request->query('level_id');
-        $districtId = $request->query('district_id');
-        $programId = $request->query('program_id');
-        $designationId = $request->query('designation_id');
-
-        $allowedGroupings = [
-            'districts' => 'district_code',
-            'designations' => 'designation_id',
-            'programs' => 'program_id',
-            'blocks' => 'block_id',
-            'gram_panchayats' => 'gram_panchayat_id',
-            'levels' => 'level_id'
-        ];
-
-        if (!$groupBy) {
-            $totalEmployeeCount = Employee::count();
-            return response()->json(['total_employee_count' => $totalEmployeeCount]);
-        }
-
-        if (!array_key_exists($groupBy, $allowedGroupings)) {
-            return response()->json(['error' => 'Invalid group_by parameter'], 400);
-        }
-
+        // Initialize the query
         $query = Employee::query();
 
-        if ($levelId) {
-            $query->where('level_id', $levelId);
+        // Only consider employees with status 1 or 5
+        $query->whereIn('status', [1, 5]);
+
+        // If a district code is provided, filter by district
+        if ($request->has('district_code')) {
+            $query->where('district_code', $request->input('district_code'));
         }
 
-        if ($districtId) {
-            $query->where('district_code', $districtId);
+        // If a block ID is provided, filter by block
+        if ($request->has('block_id')) {
+            $query->where('block_id', $request->input('block_id'));
         }
 
-        if ($programId) {
-            $query->where('program_id', $programId);
-        }
+        // Join with programs table to get program names
+        $query->join('programs', 'employees.program_id', '=', 'programs.program_id');
 
-        if ($designationId) {
-            $query->where('designation_id', $designationId);
-        }
+        // Select the program name and count of employees
+        $counts = $query->select('programs.program_name', DB::raw('count(*) as count'))
+                        ->groupBy('programs.program_name') // Group by program name
+                        ->get();
 
-        $groupColumn = $allowedGroupings[$groupBy];
-        $employeeCounts = $query->select($groupColumn)
-            ->selectRaw('COUNT(*) as employee_count')
-            ->groupBy($groupColumn)
-            ->get();
-
-        return view('employee_counts', [
-            'levels' => Level::all(),
-            'districts' => District::all(),
-            'programs' => Program::all(),
-            'designations' => Designation::all(),
-            'results' => $employeeCounts,
-            'group_by' => $groupBy,
-        ]);
+        return response()->json($counts);
     }
 }
-
-
-
-
-

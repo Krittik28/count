@@ -20,7 +20,9 @@ class Program extends Model
 
     public function employees()
     {
-        return $this->hasMany(Employee::class, 'program_id');
+        return $this->hasMany(Employee::class,'program_id');
     }
+
+
 }
 
